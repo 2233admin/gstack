@@ -44,22 +44,30 @@ if (-not $bash -or -not (Test-Path -LiteralPath $bash -PathType Leaf)) {
     exit 1
 }
 
-# Arguments travel NUL-separated in a private file, never on the native command
-# line: PowerShell's native-argument quoting splits or merges arguments that
-# contain double quotes, so bash reads them back as an exact array instead.
+# Neither user arguments nor the fixed Bash program travel as shell source on
+# the native command line: Windows PowerShell 5.1 strips embedded double quotes.
+# Keep arguments NUL-separated and run the program from a UTF-8 script file.
 $argFile = [System.IO.Path]::GetTempFileName()
-$writer = New-Object System.IO.StreamWriter($argFile, $false, (New-Object System.Text.UTF8Encoding($false)))
+$scriptFile = $null
 try {
-    foreach ($arg in $args) { $writer.Write([string]$arg); $writer.Write([char]0) }
+    $scriptFile = [System.IO.Path]::GetTempFileName()
+    $utf8 = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($scriptFile, 'mapfile -d "" -t argv < "$1"; rm -f "$1"; exec ./setup "${argv[@]}"', $utf8)
+    $writer = New-Object System.IO.StreamWriter($argFile, $false, $utf8)
+    try {
+        foreach ($arg in $args) { $writer.Write([string]$arg); $writer.Write([char]0) }
+    } finally {
+        $writer.Close()
+    }
+    Push-Location -LiteralPath $PSScriptRoot
+    try {
+        & $bash $scriptFile $argFile
+        $code = $LASTEXITCODE
+    } finally {
+        Pop-Location
+    }
 } finally {
-    $writer.Close()
-}
-Push-Location -LiteralPath $PSScriptRoot
-try {
-    & $bash -c 'mapfile -d "" -t argv < "$1"; rm -f "$1"; exec ./setup "${argv[@]}"' setup $argFile
-    $code = $LASTEXITCODE
-} finally {
-    Pop-Location
     Remove-Item -LiteralPath $argFile -Force -ErrorAction SilentlyContinue
+    if ($scriptFile) { Remove-Item -LiteralPath $scriptFile -Force -ErrorAction SilentlyContinue }
 }
 exit $code

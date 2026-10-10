@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- Windows PowerShell 5.1: `.\setup.ps1 --refresh-registered` no longer fails with Bash's `unexpected EOF while looking for matching` quote error. The fixed Bash launcher now runs from a temporary UTF-8 script instead of crossing PowerShell's native command-line quoting boundary. User arguments still travel NUL-separated, preserving spaces, quotes, empty strings and shell metacharacters; both temporary files are removed after setup exits.
+
 ## [1.91.68.0] - 2026-10-08
 
 **Claude /cso eval cells run the real scanners again, never break their own source check, and still record what they spent when a post-run check fails.**
